@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Chatbot</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background-color: #f9f9f9;
+  }
+
+  #chat-container {
+    background-color: #fff;
+    border-radius: 20px;
+    padding: 30px;
+    box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+    width: 70%;
+  }
+
+  h1 {
+    font-size: 2.8rem;
+    text-align: center;
+    margin-bottom: 30px;
+  }
+
+  #chat-history {
+    height: 300px;
+    overflow-y: auto;
+  }
+
+  .user-message {
+    font-size: 1.1rem;
+    text-align: right;
+    padding: 12px 20px;
+    background-color: #ddf;
+    border-radius: 15px;
+    margin-bottom: 10px;
+  }
+
+  .bot-message {
+    font-size: 1.2rem;
+    text-align: left;
+    padding: 12px 20px;
+    background-color: #f5f5f5;
+    border-radius: 15px;
+    margin-bottom: 10px;
+  }
+
+  form {
+    display: flex;
+    margin-top: 20px;
+  }
+
+  input {
+    flex-grow: 1;
+    margin-right: 10px;
+    padding: 12px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+  }
+
+  button {
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+
+  #loader {
+    display: none;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+  }
+</style>
+</head>
+<body>
+<div id="chat-container">
+  <h1>Planeje Suas Tarefas</h1>
+  <div id="chat-history"></div>
+  <form id="chat-form">
+    <input type="text" id="user-input" placeholder="Digite sua mensagem">
+    <button type="submit">Enviar</button>
+  </form>
+</div>
+<div id="loader">
+  <img src="loader.gif" width="150px" alt="Carregando...">
+</div>
+<script>
+  const taskList = document.getElementById('task-list');
+  const chatHistory = document.getElementById('chat-history');
+  const userInput = document.getElementById('user-input');
+  const form = document.getElementById('chat-form');
+  const loader = document.getElementById('loader');
+
+  async function addTaskToList(task, taskId) {
+    const listItem = document.createElement('li');
+    listItem.textContent = `${task.description} - ${task.date}, ${task.time}, ${task.priority}`;
+    listItem.dataset.id = taskId; // Atribuir o ID único da tarefa como um atributo de dados
+    listItem.addEventListener('click', async () => {
+      listItem.style.textDecoration = 'line-through';
+      await fetch('/remove-task', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ taskId }), // Passar o ID da tarefa para remoção
+      });
+      listItem.remove(); // Remover o item da lista quando clicado
+    });
+    taskList.appendChild(listItem);
+  }
+
+
+  async function fetchTasks() {
+    try {
+      const response = await fetch('/tasks');
+      const tasks = await response.json();
+      taskList.innerHTML = ''; // Limpar a lista antes de adicionar as novas tarefas
+      tasks.forEach((task, index) => {
+        addTaskToList(task, index + 1); // Passar o ID único da tarefa
+      });
+
+    } catch (error) {
+      console.error('Erro ao obter tarefas:', error);
+    }
+  }
+
+  async function sendMessage() {
+    const userMessage = userInput.value;
+    userInput.value = ''; // Limpar o campo de entrada
+    try {
+      loader.style.display = 'block'; // Mostrar o loader
+      const response = await fetch('/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userInput: userMessage }),
+      });
+
+      const data = await response.json();
+      const botMessage = data.response;
+      // Adicionar mensagem ao histórico de chat
+      chatHistory.innerHTML += `<div class="user-message">${userMessage}</div>`;
+      chatHistory.innerHTML += `<div class="bot-message">${botMessage}</div>`;
+
+      // Enviar a tarefa para o servidor
+      const taskParts = userMessage.split(',').map(part => part.trim());
+      if (taskParts.length === 4) {
+        const task = {
+          description: taskParts[0],
+          date: taskParts[1],
+          time: taskParts[2],
+          priority: taskParts[3]
+        };
+
+        // Adicionar tarefa à lista no cliente
+        addTaskToList(task);
+
+        await fetch('/add-task', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ task }),
+        });
+      }
+
+      // Rolar até o final do histórico de chat
+      chatHistory.scrollTop = chatHistory.scrollHeight;
+    } catch (error) {
+      console.error('Erro:', error);
+      // Lidar com erros, por exemplo, exibir uma mensagem de erro para o usuário
+    } finally {
+      loader.style.display = 'none'; // Esconder o loader após o envio da mensagem
+    }
+  }
+
+  form.addEventListener('submit', (event) => {
+    event.preventDefault(); // Prevenir envio do formulário
+    sendMessage();
+  });
+
+  // Atualizar lista de tarefas ao carregar a página
+  fetchTasks();
+</script>
+</body>
+</html>
